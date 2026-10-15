@@ -1,4 +1,4 @@
-# Project Silicium UEFI for ARM64-Based Devices
+# Project Mu UEFI Ports for MediaTek MT6895 Family
 
 <!-- ![Banner](https://github.com/Project-Silicium/Mu-Silicium/blob/main/Resources/Pictures/Banner.png) -->
 
