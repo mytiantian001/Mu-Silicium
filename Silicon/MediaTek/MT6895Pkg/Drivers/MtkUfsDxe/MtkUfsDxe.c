@@ -55,9 +55,13 @@
 //
 // MediaTek SiP service (ufs-mediatek-sip.h):
 //   arm_smccc_smc (MTK_SIP_UFS_CONTROL, UFS_MTK_SIP_DEVICE_RESET, high, ...)
-// MTK_SIP_UFS_CONTROL = ARM_SMCCC_CALL_VAL (FAST_CALL, SMC_64, OWNER_SIP, 0x276)
+// MTK_SIP_UFS_CONTROL = MTK_SIP_SMC_CMD(0x276) =
+//   ARM_SMCCC_CALL_VAL (FAST_CALL, SMC_64, OWNER_SIP, 0x276) = 0xC2000276.
+// The previous 0x81020276 encoding (SMC32, owner 1) made the ATF reject
+// the call with SMC_UNK, so the device reset never happened and the UFS
+// device stayed unresponsive (link startup 0x1, DP=0).
 //
-#define MTK_SIP_UFS_CONTROL        0x81020276
+#define MTK_SIP_UFS_CONTROL        0xC2000276
 #define UFS_MTK_SIP_DEVICE_RESET   0x2
 
 //
