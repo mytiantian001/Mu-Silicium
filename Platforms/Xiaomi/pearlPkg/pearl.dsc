@@ -94,10 +94,10 @@
   gEfiMdePkgTokenSpaceGuid.PcdPlatformBootTimeOut|0
 
   #
-  # Quiet the boot log (errors only) so a full exception dump stays on
-  # screen instead of scrolling away.
+  # Boot log: errors, warnings and info (UFS link-up detail) - use
+  # 0x80000000 for error-only builds when a crash dump must stay visible.
   #
-  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000000
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000046
 
 [LibraryClasses]
   #
