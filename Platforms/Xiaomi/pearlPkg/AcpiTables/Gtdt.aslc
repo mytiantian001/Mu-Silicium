@@ -1,0 +1,47 @@
+/** @file
+  Generic Timer Description Table (GTDT) for pearl (MT6895).
+
+  The mainline device tree describes the arch timer interrupts as
+  level-triggered, active-low (IRQ_TYPE_LEVEL_LOW), which matches the GTDT
+  flag encoding used here.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+**/
+
+#include <IndustryStandard/Acpi.h>
+#include <Library/AcpiLib.h>
+#include <Library/PcdLib.h>
+
+#include "AcpiTables.h"
+
+//
+// Level-triggered (mode = 0), active-low (polarity = 1).
+//
+#define GTDT_GTIMER_FLAGS \
+  (EFI_ACPI_6_3_GTDT_TIMER_FLAG_TIMER_INTERRUPT_POLARITY)
+
+EFI_ACPI_6_3_GENERIC_TIMER_DESCRIPTION_TABLE Gtdt = {
+  ACPI_HEADER (
+    EFI_ACPI_6_3_GENERIC_TIMER_DESCRIPTION_TABLE_SIGNATURE,
+    EFI_ACPI_6_3_GENERIC_TIMER_DESCRIPTION_TABLE,
+    EFI_ACPI_6_3_GENERIC_TIMER_DESCRIPTION_TABLE_REVISION
+    ),
+  0xFFFFFFFFFFFFFFFF,                           // UINT64 PhysicalAddress (not memory mapped)
+  0,                                            // UINT32 GlobalFlags (level triggered)
+  FixedPcdGet32 (PcdArmArchTimerSecIntrNum),    // UINT32 SecurePL1TimerGSIV
+  GTDT_GTIMER_FLAGS,                            // UINT32 SecurePL1TimerFlags
+  FixedPcdGet32 (PcdArmArchTimerIntrNum),       // UINT32 NonSecurePL1TimerGSIV
+  GTDT_GTIMER_FLAGS,                            // UINT32 NonSecurePL1TimerFlags
+  FixedPcdGet32 (PcdArmArchTimerVirtIntrNum),   // UINT32 VirtualTimerGSIV
+  GTDT_GTIMER_FLAGS,                            // UINT32 VirtualTimerFlags
+  FixedPcdGet32 (PcdArmArchTimerHypIntrNum),    // UINT32 NonSecurePL2TimerGSIV
+  GTDT_GTIMER_FLAGS,                            // UINT32 NonSecurePL2TimerFlags
+  0,                                            // UINT32 PlatformTimerCount
+  0                                             // UINT32 PlatformTimerOffset
+};
+
+//
+// Reference the table being generated to prevent the optimizer from removing
+// the data structure from the executable.
+//
+VOID * CONST ReferenceAcpiTable = &Gtdt;

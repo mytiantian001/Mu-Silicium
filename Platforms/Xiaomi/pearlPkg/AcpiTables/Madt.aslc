@@ -1,0 +1,91 @@
+/** @file
+  Multiple APIC Description Table (MADT) for pearl (MT6895, GICv3).
+
+  Describes the GICv3 distributor, the redistributor discovery range and the
+  8 CPU cores (4x Cortex-A55 + 3x Cortex-A78 + 1x Cortex-A78 prime).
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+**/
+
+#include <IndustryStandard/Acpi.h>
+#include <Library/AcpiLib.h>
+#include <Library/PcdLib.h>
+
+#include "AcpiTables.h"
+
+#pragma pack (1)
+
+typedef struct {
+  EFI_ACPI_6_3_MULTIPLE_APIC_DESCRIPTION_TABLE_HEADER  Header;
+  EFI_ACPI_6_3_GIC_STRUCTURE                           GicInterfaces[PEARL_CPU_COUNT];
+  EFI_ACPI_6_3_GIC_DISTRIBUTOR_STRUCTURE               GicDistributor;
+  EFI_ACPI_6_3_GICR_STRUCTURE                          GicRedistributor;
+} PEARL_MULTIPLE_APIC_DESCRIPTION_TABLE;
+
+#pragma pack ()
+
+#define PEARL_GICC(i) {                                          \
+    EFI_ACPI_6_3_GIC,                                            \
+    sizeof (EFI_ACPI_6_3_GIC_STRUCTURE),                         \
+    EFI_ACPI_RESERVED_WORD,                                      \
+    (i),                                                         \
+    (i),                                                         \
+    EFI_ACPI_6_3_GIC_ENABLED,                                    \
+    0,                                                           \
+    0,                                                           \
+    0,                                                           \
+    0,                                                           \
+    0,                                                           \
+    0,                                                           \
+    0,                                                           \
+    (PEARL_GIC_REDISTRIBUTOR_BASE + (i) * PEARL_GIC_REDISTRIBUTOR_STRIDE), \
+    PEARL_MPIDR (i),                                             \
+    0,                                                           \
+    0,                                                           \
+    0                                                            \
+  }
+
+PEARL_MULTIPLE_APIC_DESCRIPTION_TABLE Madt = {
+  {
+    ACPI_HEADER (
+      EFI_ACPI_6_3_MULTIPLE_APIC_DESCRIPTION_TABLE_SIGNATURE,
+      PEARL_MULTIPLE_APIC_DESCRIPTION_TABLE,
+      EFI_ACPI_6_3_MULTIPLE_APIC_DESCRIPTION_TABLE_REVISION
+      ),
+    0,                                        // UINT32 LocalApicAddress
+    0                                         // UINT32 Flags
+  },
+  {
+    PEARL_GICC (0),
+    PEARL_GICC (1),
+    PEARL_GICC (2),
+    PEARL_GICC (3),
+    PEARL_GICC (4),
+    PEARL_GICC (5),
+    PEARL_GICC (6),
+    PEARL_GICC (7)
+  },
+  {
+    EFI_ACPI_6_3_GICD,                        // UINT8  Type
+    sizeof (EFI_ACPI_6_3_GIC_DISTRIBUTOR_STRUCTURE),  // UINT8 Length
+    EFI_ACPI_RESERVED_WORD,                   // UINT16 Reserved1
+    0,                                        // UINT32 GicId
+    PEARL_GIC_DISTRIBUTOR_BASE,               // UINT64 PhysicalBaseAddress
+    0,                                        // UINT32 SystemVectorBase
+    EFI_ACPI_6_3_GIC_V3,                      // UINT8  GicVersion
+    { EFI_ACPI_RESERVED_BYTE, EFI_ACPI_RESERVED_BYTE, EFI_ACPI_RESERVED_BYTE }
+  },
+  {
+    EFI_ACPI_6_3_GICR,                        // UINT8  Type
+    sizeof (EFI_ACPI_6_3_GICR_STRUCTURE),     // UINT8  Length
+    EFI_ACPI_RESERVED_WORD,                   // UINT16 Reserved
+    PEARL_GIC_REDISTRIBUTOR_BASE,             // UINT64 DiscoveryRangeBaseAddress
+    PEARL_GIC_REDISTRIBUTOR_SIZE              // UINT32 DiscoveryRangeLength
+  }
+};
+
+//
+// Reference the table being generated to prevent the optimizer from removing
+// the data structure from the executable.
+//
+VOID * CONST ReferenceAcpiTable = &Madt;

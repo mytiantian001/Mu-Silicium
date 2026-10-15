@@ -124,6 +124,11 @@
 !endif
 
   #
+  # ACPI tables (MADT/GTDT/FADT/DSDT) for Windows and ACPI-aware OSes.
+  #
+  pearlPkg/AcpiTables/AcpiTables.inf
+
+  #
   # USB host: non-discoverable XHCI registration + stock XHCI driver
   #
   MdeModulePkg/Bus/Pci/NonDiscoverablePciDeviceDxe/NonDiscoverablePciDeviceDxe.inf

@@ -1628,7 +1628,17 @@ UfsExecScsiCmds (
   //
   Packet->TargetStatus = Response->Status;
   if (Response->Response != 0) {
-    DEBUG ((DEBUG_ERROR, "UfsExecScsiCmds() fails with Target Failure\n"));
+    DEBUG ((
+      DEBUG_ERROR,
+      "UfsExecScsiCmds() fails with Target Failure (LUN %d, CDB 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x)\n",
+      Lun,
+      ((UINT8 *)Packet->Cdb)[0],
+      ((UINT8 *)Packet->Cdb)[1],
+      ((UINT8 *)Packet->Cdb)[2],
+      ((UINT8 *)Packet->Cdb)[3],
+      ((UINT8 *)Packet->Cdb)[4],
+      ((UINT8 *)Packet->Cdb)[5]
+      ));
     Status = EFI_DEVICE_ERROR;
     goto Exit;
   }
