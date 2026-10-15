@@ -62,6 +62,13 @@
   gMediaTekTokenSpaceGuid.PcdMipiFrameBufferOvl0_2LBase|0x14003000
 
   #
+  # Framebuffer console layout (SiliciumPkg FrameBufferSerialPortLib).
+  #
+  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferWidth|1088
+  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferHeight|2460
+  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferColorDepth|32
+
+  #
   # Boot Manager: no countdown for bring-up
   #
   gEfiMdePkgTokenSpaceGuid.PcdPlatformBootTimeOut|0
