@@ -17,7 +17,14 @@
 !include SiliciumPkg/SiliciumPkg.dsc.inc
 
 [BuildOptions]
-  *_*_AARCH64_CC_FLAGS = -march=armv8.2-a+crypto+rcpc
+  #
+  # -mstrict-align: the AArch64 runs with alignment checking enabled
+  # (SCTLR.A=1) and the default CLANGPDB flags let the compiler emit
+  # unaligned accesses for structs it assumes aligned (e.g. MBR/GPT
+  # partition records), which traps. The vendor tree always built with
+  # -mstrict-align; restore it here.
+  #
+  *_*_AARCH64_CC_FLAGS = -march=armv8.2-a+crypto+rcpc -mstrict-align
 
 [PcdsFixedAtBuild]
   #
