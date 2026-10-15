@@ -1,0 +1,41 @@
+## @file
+# MediaTek USB host controller platform driver (MT6895 / pearl).
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = MtkUsbDxe
+  FILE_GUID                      = 5E8A3C71-2D46-4B9F-A183-7C5E0D9A4F62
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = MtkUsbDxeInitialize
+
+[Sources]
+  MtkUsbDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  MT6895Pkg/MT6895Pkg.dec
+
+[LibraryClasses]
+  BaseLib
+  DebugLib
+  IoLib
+  NonDiscoverableDeviceRegistrationLib
+  PcdLib
+  TimerLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+  UefiLib
+
+[FixedPcd]
+  gMediaTekTokenSpaceGuid.PcdI2cBase
+  gMediaTekTokenSpaceGuid.PcdIppcBase
+  gMediaTekTokenSpaceGuid.PcdXhciBase
+  gMediaTekTokenSpaceGuid.PcdU2PhyBase
+
+[Depex]
+  TRUE

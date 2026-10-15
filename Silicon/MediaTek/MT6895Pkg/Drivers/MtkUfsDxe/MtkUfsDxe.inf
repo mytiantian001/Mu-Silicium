@@ -1,0 +1,50 @@
+## @file
+# MediaTek UFS host controller platform driver.
+#
+# Provides the EDKII_UFS_HOST_CONTROLLER_PROTOCOL for the generic
+# MdeModulePkg UfsPassThruDxe driver on MediaTek SoCs (MT6895 and friends).
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = MtkUfsDxe
+  FILE_GUID                      = 7C4F2A61-9B3E-4D58-8E17-2A5C6D9F0B41
+  MODULE_TYPE                    = UEFI_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = MtkUfsDxeInitialize
+
+[Sources]
+  MtkUfsDxe.c
+
+[Packages]
+  ArmPkg/ArmPkg.dec
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  MT6895Pkg/MT6895Pkg.dec
+
+[LibraryClasses]
+  ArmSmcLib
+  BaseLib
+  CacheMaintenanceLib
+  DebugLib
+  DevicePathLib
+  DxeServicesTableLib
+  IoLib
+  MemoryAllocationLib
+  PcdLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+  UefiLib
+
+[Protocols]
+  gEdkiiUfsHostControllerProtocolGuid   ## PRODUCES
+  gEdkiiUfsHcPlatformProtocolGuid       ## PRODUCES
+  gEfiDevicePathProtocolGuid            ## PRODUCES
+
+[FixedPcd]
+  gMediaTekTokenSpaceGuid.PcdUfsHostControllerBase
+
+[Depex]
+  TRUE

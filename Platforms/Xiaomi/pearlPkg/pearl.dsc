@@ -1,0 +1,92 @@
+##
+#  Copyright (c) 2011 - 2022, ARM Limited. All rights reserved.
+#  Copyright (c) 2014, Linaro Limited. All rights reserved.
+#  Copyright (c) 2015 - 2020, Intel Corporation. All rights reserved.
+#  Copyright (c) 2018, Bingxing Wang. All rights reserved.
+#  Copyright (c) Microsoft Corporation.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+################################################################################
+#
+# Defines Section - statements that will be processed to create a Makefile.
+#
+################################################################################
+[Defines]
+  PLATFORM_NAME                  = pearl
+  PLATFORM_GUID                  = 5B3D8F21-7A64-4C9E-B02D-8E41C6A3F5D7
+  PLATFORM_VERSION               = 0.1
+  DSC_SPECIFICATION              = 0x00010005
+  OUTPUT_DIRECTORY               = Build/pearlPkg
+  SUPPORTED_ARCHITECTURES        = AARCH64
+  BUILD_TARGETS                  = RELEASE|DEBUG
+  SKUID_IDENTIFIER               = DEFAULT
+  FLASH_DEFINITION               = pearlPkg/pearl.fdf
+  USE_CUSTOM_DISPLAY_DRIVER      = 1
+
+!include MT6895Pkg/MT6895Pkg.dsc.inc
+
+[PcdsFixedAtBuild]
+  #
+  # DDR Memory
+  #
+  gArmTokenSpaceGuid.PcdSystemMemoryBase|0x40000000
+
+  #
+  # UEFI Stack
+  #
+  gArmPlatformTokenSpaceGuid.PcdCPUCoresStackBase|0x40C00000
+  gArmPlatformTokenSpaceGuid.PcdCPUCorePrimaryStackSize|0x40000
+
+  #
+  # SMBIOS
+  #
+  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemManufacturer|"Xiaomi"
+  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemModel|"Redmi Note 12T Pro"
+  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemRetailModel|"pearl"
+  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemRetailSku|"Redmi_Note_12T_Pro_pearl"
+  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemBoardModel|"Redmi Note 12T Pro"
+
+  #
+  # Simple Frame Buffer (LK scanout: 1088 px pitch, 2460 px, 32 bpp).
+  # Width is the scan-buffer pitch, VisibleWidth the real 1080 px panel width.
+  #
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferAddress|0xfe14f000
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferWidth|1088
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferHeight|2460
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferVisibleWidth|1080
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferLayers|3
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferPixelFormat|1   # RGB (a8r8g8b8 word order)
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferOvl0Base|0x14002000
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferOvl0_2LBase|0x14003000
+
+  #
+  # Boot Manager: no countdown for bring-up
+  #
+  gEfiMdePkgTokenSpaceGuid.PcdPlatformBootTimeOut|0
+
+[LibraryClasses]
+  #
+  # Memory Libraries
+  #
+  MemoryMapLib|pearlPkg/Library/MemoryMapLib/MemoryMapLib.inf
+
+  #
+  # Used by MtkUsbDxe to expose the XHCI as a non-discoverable PCI device.
+  #
+  NonDiscoverableDeviceRegistrationLib|MdeModulePkg/Library/NonDiscoverableDeviceRegistrationLib/NonDiscoverableDeviceRegistrationLib.inf
+
+[Components]
+!if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
+  #
+  # Custom display: MT6895 LK handoff takeover (OVL fixup)
+  #
+  MT6895Pkg/Drivers/SimpleFbDxe/SimpleFbDxe.inf
+!endif
+
+  #
+  # USB host: non-discoverable XHCI registration + stock XHCI driver
+  #
+  MdeModulePkg/Bus/Pci/NonDiscoverablePciDeviceDxe/NonDiscoverablePciDeviceDxe.inf
+  MdeModulePkg/Bus/Pci/XhciDxe/XhciDxe.inf

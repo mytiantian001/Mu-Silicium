@@ -1,0 +1,38 @@
+[Defines]
+  DEC_SPECIFICATION              = 0x00010005
+  PACKAGE_NAME                   = MT6895Pkg
+  PACKAGE_GUID                   = 0x3A7D21F4, 0x5E68, 0x4B9C, { 0xA2, 0x71, 0xC8, 0x3F, 0x9D, 0x56, 0xE0, 0x14 }
+  PACKAGE_VERSION                = 0.1
+
+[Includes]
+  Include
+
+[Guids]
+  gMediaTekTokenSpaceGuid             = { 0x882f8c2b, 0x9646, 0x435f, { 0x8d, 0xe5, 0xf2, 0x08, 0xff, 0x80, 0xc1, 0xbd } }
+
+[PcdsFixedAtBuild.common]
+  # Simple FrameBuffer
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferAddress|0|UINT32|0x0000a400
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferWidth|720|UINT32|0x0000a401
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferHeight|1440|UINT32|0x0000a402
+  # Pixel format of the LK handoff framebuffer. 0 = BGR (legacy), 1 = RGB.
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferPixelFormat|0|UINT32|0x0000a40a
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferPixelBpp|32|UINT32|0x0000a403
+  # True visible width when the scan buffer pitch (PcdMipiFrameBufferWidth) is
+  # wider than the visible resolution. 0 keeps legacy behaviour.
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferVisibleWidth|0|UINT32|0x0000a404
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferVisibleHeight|1440|UINT32|0x0000a405
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferLayers|2|UINT32|0x0000a406
+  # Display overlay (OVL) bases used by the SimpleFbDxe LK handoff takeover.
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferOvl0Base|0|UINT32|0x0000a40b
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferOvl0_2LBase|0|UINT32|0x0000a40c
+  # UFS host controller MMIO base (0 disables the MediaTek UFS driver).
+  gMediaTekTokenSpaceGuid.PcdUfsHostControllerBase|0|UINT32|0x0000a40d
+  # Keypad (KPD) and SPMI PMIF bases for the keypad driver.
+  gMediaTekTokenSpaceGuid.PcdKeypadBase|0|UINT32|0x0000a40e
+  gMediaTekTokenSpaceGuid.PcdPmifBase|0|UINT32|0x0000a40f
+  # USB: I2C bus, SSUSB IPPC block and XHCI controller bases.
+  gMediaTekTokenSpaceGuid.PcdI2cBase|0|UINT32|0x0000a410
+  gMediaTekTokenSpaceGuid.PcdIppcBase|0|UINT32|0x0000a411
+  gMediaTekTokenSpaceGuid.PcdXhciBase|0|UINT32|0x0000a412
+  gMediaTekTokenSpaceGuid.PcdU2PhyBase|0|UINT32|0x0000a413
