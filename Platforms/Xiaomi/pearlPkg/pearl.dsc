@@ -110,6 +110,11 @@
   #
   NonDiscoverableDeviceRegistrationLib|MdeModulePkg/Library/NonDiscoverableDeviceRegistrationLib/NonDiscoverableDeviceRegistrationLib.inf
 
+  #
+  # Used by the SCSI bus/disk drivers on top of the UFS pass-thru driver.
+  #
+  UefiScsiLib|MdePkg/Library/UefiScsiLib/UefiScsiLib.inf
+
 [Components]
 !if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
   #
@@ -123,3 +128,10 @@
   #
   MdeModulePkg/Bus/Pci/NonDiscoverablePciDeviceDxe/NonDiscoverablePciDeviceDxe.inf
   MdeModulePkg/Bus/Pci/XhciDxe/XhciDxe.inf
+
+  #
+  # SCSI stack: the UFS pass-thru driver produces an ExtScsiPassThru
+  # protocol; ScsiBus/ScsiDisk turn the LUNs into BlockIo devices.
+  #
+  MdeModulePkg/Bus/Scsi/ScsiBusDxe/ScsiBusDxe.inf
+  MdeModulePkg/Bus/Scsi/ScsiDiskDxe/ScsiDiskDxe.inf

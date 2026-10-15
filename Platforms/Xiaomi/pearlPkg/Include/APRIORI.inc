@@ -18,6 +18,8 @@ APRIORI DXE {
   #
   INF MT6895Pkg/Drivers/MtkUfsDxe/MtkUfsDxe.inf
   INF MT6895Pkg/Drivers/MtkUfsPassThruDxe/UfsPassThruDxe.inf
+  INF MdeModulePkg/Bus/Scsi/ScsiBusDxe/ScsiBusDxe.inf
+  INF MdeModulePkg/Bus/Scsi/ScsiDiskDxe/ScsiDiskDxe.inf
 
   INF FatPkg/EnhancedFatDxe/Fat.inf
   INF MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf

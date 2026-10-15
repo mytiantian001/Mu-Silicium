@@ -31,6 +31,8 @@
   #
   INF MT6895Pkg/Drivers/MtkUfsDxe/MtkUfsDxe.inf
   INF MT6895Pkg/Drivers/MtkUfsPassThruDxe/UfsPassThruDxe.inf
+  INF MdeModulePkg/Bus/Scsi/ScsiBusDxe/ScsiBusDxe.inf
+  INF MdeModulePkg/Bus/Scsi/ScsiDiskDxe/ScsiDiskDxe.inf
 
   #
   # USB host (MediaTek platform bring-up + non-discoverable XHCI + stock XHCI driver)
