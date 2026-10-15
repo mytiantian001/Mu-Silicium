@@ -1996,6 +1996,22 @@ UfsDeviceDetection (
   // Try up to 3 times for establishing data link with device.
   //
   for (Retry = 0; Retry < 3; Retry++) {
+    if (Retry > 0) {
+      //
+      // Pearl: the HCE cycle run after the previous failure resets the
+      // UniPro, so the platform pre-link setup (UniPro out of LPM, TX LCC
+      // off, deep stall off) must be re-applied before every attempt -
+      // mirroring ufshcd_link_startup()'s per-iteration PRE_CHANGE notify.
+      //
+      if ((mUfsHcPlatform != NULL) && (mUfsHcPlatform->Callback != NULL)) {
+        Status = mUfsHcPlatform->Callback (Private->Handle, EdkiiUfsHcPreLinkStartup, &Private->UfsHcDriverInterface);
+        if (EFI_ERROR (Status)) {
+          DEBUG ((DEBUG_ERROR, "Failure from platform driver during EdkiiUfsHcPreLinkStartup, Status = %r\n", Status));
+          return Status;
+        }
+      }
+    }
+
     LinkStartupCommand.Opcode = UfsUicDmeLinkStartup;
     LinkStartupCommand.Arg1   = 0;
     LinkStartupCommand.Arg2   = 0;
@@ -2031,6 +2047,22 @@ UfsDeviceDetection (
     }
 
     if (EFI_ERROR (Status)) {
+      //
+      // Pearl: a failed link startup can leave the local UniPro in a bad
+      // state. Mirror ufshcd_link_startup(): run a full HCE cycle (which
+      // resets and re-initializes the UniPro) before the next attempt.
+      //
+      DEBUG ((
+        DEBUG_INFO,
+        "MtkUfsPassThru: link startup #%d failed - re-running the HCE cycle before the next attempt\n",
+        Retry
+        ));
+      Status = UfsEnableHostController (Private);
+      if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_ERROR, "MtkUfsPassThru: HCE re-enable failed: %r\n", Status));
+        return EFI_DEVICE_ERROR;
+      }
+
       continue;
     }
 
