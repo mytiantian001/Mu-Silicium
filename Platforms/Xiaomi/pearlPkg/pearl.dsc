@@ -69,9 +69,35 @@
   gSiliciumPkgTokenSpaceGuid.PcdFrameBufferColorDepth|32
 
   #
+  # USB: MT6375 on i2c5 (0x11280000), SSUSB IPPC (0x11203e00), the MTK XHCI
+  # controller (0x11200000) and the U2 PHY (t-phy@11e40000).
+  #
+  gMediaTekTokenSpaceGuid.PcdI2cBase|0x11280000
+  gMediaTekTokenSpaceGuid.PcdIppcBase|0x11203e00
+  gMediaTekTokenSpaceGuid.PcdXhciBase|0x11200000
+  gMediaTekTokenSpaceGuid.PcdU2PhyBase|0x11e40000
+
+  #
+  # UFS host controller (mainline mt6895.dtsi ufshci@112b0000).
+  #
+  gMediaTekTokenSpaceGuid.PcdUfsHostControllerBase|0x112b0000
+
+  #
+  # Keypad: KPD controller (kp@1c00e000) and SPMI PMIF (spmi@1c804000).
+  #
+  gMediaTekTokenSpaceGuid.PcdKeypadBase|0x1c00e000
+  gMediaTekTokenSpaceGuid.PcdPmifBase|0x1c804000
+
+  #
   # Boot Manager: no countdown for bring-up
   #
   gEfiMdePkgTokenSpaceGuid.PcdPlatformBootTimeOut|0
+
+  #
+  # Quiet the boot log (errors only) so a full exception dump stays on
+  # screen instead of scrolling away.
+  #
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000000
 
 [LibraryClasses]
   #
