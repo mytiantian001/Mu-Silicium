@@ -200,17 +200,22 @@ MtkUfsAllocateBuffer (
   // descriptors with plain memory writes and rings the doorbell without any
   // cache maintenance (it was written for cache-coherent x86 platforms), so
   // on ARM the controller would read stale data and the CPU would read a
-  // stale OCS. Mark these buffers uncached: every CPU write then reaches
-  // DRAM directly and every controller write is immediately visible.
+  // stale OCS. Mark these buffers non-cacheable.
+  //
+  // EFI_MEMORY_WC maps to Normal non-cacheable memory on ARM, which keeps
+  // the DMA coherency but - unlike EFI_MEMORY_UC (Device-nGnRE) - tolerates
+  // unaligned accesses. The Windows boot chain (and the FAT driver) process
+  // file data in place, and an unaligned access to Device memory faults
+  // with 'Data abort: Alignment fault' regardless of SCTLR.A.
   //
   Status = gDS->SetMemorySpaceAttributes (
                   (EFI_PHYSICAL_ADDRESS)(UINTN)*HostAddress,
                   EFI_PAGES_TO_SIZE (Pages),
-                  EFI_MEMORY_UC
+                  EFI_MEMORY_WC
                   );
   DEBUG ((
     DEBUG_INFO,
-    "MtkUfsDxe: AllocateBuffer(0x%lx, %d pages) uncached: %r\n",
+    "MtkUfsDxe: AllocateBuffer(0x%lx, %d pages) normal-nc: %r\n",
     (UINT64)(UINTN)*HostAddress,
     (UINT32)Pages,
     Status

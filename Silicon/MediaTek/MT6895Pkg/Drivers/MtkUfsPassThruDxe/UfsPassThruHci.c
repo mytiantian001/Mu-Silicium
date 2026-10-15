@@ -786,6 +786,13 @@ UfsStartExecCmd (
     return Status;
   }
 
+  //
+  // Pearl: the transfer descriptors live in Normal non-cacheable memory
+  // (EFI_MEMORY_WC). Make sure the descriptor writes have reached memory
+  // before the doorbell is rung so the controller's DMA sees them.
+  //
+  MemoryFence ();
+
   Status = UfsMmioWrite32 (Private, UFS_HC_UTRLDBR_OFFSET, BIT0 << Slot);
   if (EFI_ERROR (Status)) {
     return Status;
