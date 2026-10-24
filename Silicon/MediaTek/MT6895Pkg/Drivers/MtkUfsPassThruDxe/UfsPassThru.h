@@ -63,6 +63,7 @@ typedef struct _UFS_PASS_THRU_PRIVATE_DATA {
 
   VOID                                  *UtpTrlBase;
   UINT8                                 Nutrs;
+  UINT32                                SlotBusy;
   VOID                                  *TrlMapping;
   VOID                                  *UtpTmrlBase;
   UINT8                                 Nutmrs;

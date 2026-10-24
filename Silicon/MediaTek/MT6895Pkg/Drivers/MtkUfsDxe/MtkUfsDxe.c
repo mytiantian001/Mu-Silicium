@@ -7,14 +7,19 @@
   The bootloader (LK) already brings up the UFS PHY, clocks and the UniPro
   link (it boots from UFS), and the mainline kernel's ufs-mediatek driver
   relies on the same setup (its device tree intentionally omits the clocks,
-  resets and PHY for this board). This driver therefore only:
+  resets and PHY for this board). This driver therefore:
 
     - sets the MediaTek "CLK_CG early" bit in REG_UFS_XOUFS_CTRL (0x140),
       mirroring ufs_mtk_hce_enable_notify() of the mainline driver, which
       bypasses the abnormal ERR_CHK signal and prevents host hangs
+    - pulses the device reset and requests the reference clock through the
+      MediaTek SiP service, then runs the pre-link (UniPro LPM/TX-LCC/deep
+      stall) and post-link (UniPro clock gating) sequences
     - exposes the UFSHCI MMIO registers at PcdUfsHostControllerBase
     - provides identity DMA mapping with cache maintenance (the UFS
       controller is not behind a programmed IOMMU on this platform)
+    - keeps descriptor rings below 4 GiB and clears UFS_HC_CAP_64ADDR so
+      the generic pass-thru driver uses the 32-bit UTRL/UTRD path
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
@@ -22,6 +27,7 @@
 #include <PiDxe.h>
 
 #include <Library/BaseLib.h>
+#include <Library/BaseMemoryLib.h>
 #include <Library/CacheMaintenanceLib.h>
 #include <Library/DebugLib.h>
 #include <Library/DevicePathLib.h>
@@ -36,6 +42,8 @@
 #include <Protocol/DevicePath.h>
 #include <Protocol/UfsHostController.h>
 #include <Protocol/UfsHostControllerPlatform.h>
+
+#include <IndustryStandard/UfsHci.h>
 
 #define MTK_UFS_HC_PRIVATE_SIGNATURE  SIGNATURE_32 ('M', 'T', 'K', 'U')
 
@@ -95,9 +103,20 @@
 //
 // UniPro MIB attributes (ufs-mediatek.h / unipro.h).
 //
+#define MTK_MIB_PA_LOCALVERINFO           0x15A9
+#define MTK_MIB_VS_DEBUGCLOCKENABLE      0xD0A1
 #define MTK_MIB_VS_UNIPROPOWERDOWNCONTROL  0xD0A8
 #define MTK_MIB_VS_SAVEPOWERCONTROL        0xD0A6
 #define MTK_MIB_PA_LOCAL_TX_LCC_ENABLE     0x155E
+
+//
+// VS_SAVEPOWERCONTROL / VS_DEBUGCLOCKENABLE bits (ufs-mediatek.h).
+//
+#define MTK_SAVEPOWER_RX_SYMBOL_CLK_GATE  BIT0
+#define MTK_SAVEPOWER_SYS_CLK_GATE        BIT2
+#define MTK_SAVEPOWER_TX_CLK_GATE         BIT3
+#define MTK_SAVEPOWER_DEEP_STALL          BIT6
+#define MTK_DEBUGCLK_TX_SYMBOL_CLK_REQ_FORCE  BIT5
 
 //
 // UICCMDARG1 encoding for DME commands: the attribute ID lives in bits
@@ -178,16 +197,33 @@ MtkUfsAllocateBuffer (
   IN     UINT64                              Attributes
   )
 {
-  EFI_STATUS  Status;
+  EFI_STATUS            Status;
+  EFI_PHYSICAL_ADDRESS  Address;
 
   if ((This == NULL) || (HostAddress == NULL) || (Pages == 0)) {
     return EFI_INVALID_PARAMETER;
   }
 
-  Status = gBS->AllocatePages (Type, MemoryType, Pages, (EFI_PHYSICAL_ADDRESS *)HostAddress);
+  //
+  // The EDK2 UFS pass-thru driver programs 32-bit UTRL/UTRD addresses when
+  // the controller capabilities do not advertise 64-bit addressing.  Keep
+  // the descriptor rings below 4 GiB so those fields can never truncate.
+  // (OverrideHcInfo() clears UFS_HC_CAP_64ADDR for the same reason.)
+  //
+  Address = 0xFFFFFFFFULL;
+  Status  = gBS->AllocatePages (AllocateMaxAddress, MemoryType, Pages, &Address);
   if (EFI_ERROR (Status)) {
-    return Status;
+    //
+    // Fall back to the caller's allocation type if the 32-bit window is
+    // exhausted; the caller checks the mapped address before using it.
+    //
+    Status = gBS->AllocatePages (Type, MemoryType, Pages, &Address);
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
   }
+
+  *HostAddress = (VOID *)(UINTN)Address;
 
   //
   // Make sure no stale cache lines can be written back over the DMA data.
@@ -213,6 +249,7 @@ MtkUfsAllocateBuffer (
                   EFI_PAGES_TO_SIZE (Pages),
                   EFI_MEMORY_WC
                   );
+  ZeroMem (*HostAddress, EFI_PAGES_TO_SIZE (Pages));
   DEBUG ((
     DEBUG_INFO,
     "MtkUfsDxe: AllocateBuffer(0x%lx, %d pages) normal-nc: %r\n",
@@ -730,17 +767,154 @@ MtkUfsSendUicCommand (
 }
 
 /**
+  Clear the UFSHCI interrupt and UIC error status registers.
+
+  IS and the UEC* registers are write-one-to-clear.  The generic pass-thru
+  driver only clears UCCS, so a PHY adapter error left over from link
+  startup can stay asserted and block the first UTP request.
+**/
+STATIC
+VOID
+MtkUfsClearHciErrors (
+  VOID
+  )
+{
+  UINTN  Base;
+
+  Base = mMtkUfsHcPrivate.UfsHcBase;
+
+  MmioWrite32 (Base + MTK_REG_UFS_IS, 0xFFFFFFFF);
+  MmioWrite32 (Base + UFS_HC_UECPA_OFFSET, 0xFFFFFFFF);
+  MmioWrite32 (Base + UFS_HC_UECDL_OFFSET, 0xFFFFFFFF);
+  MmioWrite32 (Base + UFS_HC_UECN_OFFSET, 0xFFFFFFFF);
+  MmioWrite32 (Base + UFS_HC_UECT_OFFSET, 0xFFFFFFFF);
+  MmioWrite32 (Base + UFS_HC_UECDME_OFFSET, 0xFFFFFFFF);
+}
+
+/**
+  Implement ufs_mtk_post_link(): enable the UniPro clock-gating features.
+
+  This is a power optimisation only.  A DME failure must not abort the boot,
+  so the callback logs the error and returns success.
+**/
+STATIC
+VOID
+MtkUfsPostLink (
+  VOID
+  )
+{
+  UINT32      Value;
+  UINT32      Result;
+  EFI_STATUS  Status;
+
+  Value  = 0;
+  Result = 0;
+  Status = MtkUfsSendUicCommand (
+             MTK_UIC_DME_GET,
+             MTK_UIC_ARG_MIB (MTK_MIB_VS_SAVEPOWERCONTROL),
+             0,
+             0,
+             &Result,
+             &Value
+             );
+  if (EFI_ERROR (Status) || ((Result & 0xFF) != 0)) {
+    DEBUG ((DEBUG_WARN, "MtkUfsDxe: PostLink DME_GET(0xD0A6) failed: %r result=0x%x\n", Status, Result & 0xFF));
+    return;
+  }
+
+  Value |= MTK_SAVEPOWER_RX_SYMBOL_CLK_GATE |
+           MTK_SAVEPOWER_SYS_CLK_GATE |
+           MTK_SAVEPOWER_TX_CLK_GATE;
+  Result = 0;
+  Status = MtkUfsSendUicCommand (
+             MTK_UIC_DME_SET,
+             MTK_UIC_ARG_MIB (MTK_MIB_VS_SAVEPOWERCONTROL),
+             0,
+             Value,
+             &Result,
+             NULL
+             );
+  if (EFI_ERROR (Status) || ((Result & 0xFF) != 0)) {
+    DEBUG ((DEBUG_WARN, "MtkUfsDxe: PostLink DME_SET(0xD0A6)=0x%x failed: %r result=0x%x\n", Value, Status, Result & 0xFF));
+    return;
+  }
+
+  Value  = 0;
+  Result = 0;
+  Status = MtkUfsSendUicCommand (
+             MTK_UIC_DME_GET,
+             MTK_UIC_ARG_MIB (MTK_MIB_VS_DEBUGCLOCKENABLE),
+             0,
+             0,
+             &Result,
+             &Value
+             );
+  if (EFI_ERROR (Status) || ((Result & 0xFF) != 0)) {
+    DEBUG ((DEBUG_WARN, "MtkUfsDxe: PostLink DME_GET(0xD0A1) failed: %r result=0x%x\n", Status, Result & 0xFF));
+    return;
+  }
+
+  Value &= ~(UINT32)MTK_DEBUGCLK_TX_SYMBOL_CLK_REQ_FORCE;
+  Result = 0;
+  Status = MtkUfsSendUicCommand (
+             MTK_UIC_DME_SET,
+             MTK_UIC_ARG_MIB (MTK_MIB_VS_DEBUGCLOCKENABLE),
+             0,
+             Value,
+             &Result,
+             NULL
+             );
+  DEBUG ((DEBUG_INFO, "MtkUfsDxe: PostLink clock gating -> %r result=0x%x\n", Status, Result & 0xFF));
+}
+
+/**
+  Override the host-controller capabilities reported by the generic driver.
+
+  All descriptor rings are allocated below 4 GiB, and the EDK2 pass-thru
+  driver handles the UTRL/UTRD base-address registers as a 32-bit pair when
+  UFS_HC_CAP_64ADDR is clear.  Keeping that path avoids programming the
+  upper-address registers with values the controller does not use.
+**/
+STATIC
+EFI_STATUS
+EFIAPI
+MtkUfsOverrideHcInfo (
+  IN     EFI_HANDLE         ControllerHandle,
+  IN OUT EDKII_UFS_HC_INFO  *HcInfo
+  )
+{
+  if (HcInfo == NULL) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  DEBUG ((
+    DEBUG_INFO,
+    "MtkUfsDxe: HCI version=0x%x capabilities=0x%x\n",
+    HcInfo->Version,
+    HcInfo->Capabilities
+    ));
+
+  HcInfo->Capabilities &= ~(UINT32)UFS_HC_CAP_64ADDR;
+
+  DEBUG ((DEBUG_INFO, "MtkUfsDxe: HCI capabilities -> 0x%x (64ADDR cleared)\n", HcInfo->Capabilities));
+  return EFI_SUCCESS;
+}
+
+/**
   Platform callback consumed by UfsPassThruDxe (EDKII_UFS_HC_PLATFORM_PROTOCOL).
 
   Implements the MediaTek host controller quirks that the generic driver does
   not know about, mirroring the mainline ufs-mediatek driver:
 
-    - PreHce: turn on CLK_CG (cleared by every HCE cycle) and disable
-      auto-hibernate; clear HCE and issue DME_RESET + DME_ENABLE as required
-      by the UFS 2.0 spec 7.1.1 initialization sequence (the generic driver
-      only toggles HCE).
+    - PreHce: reset the UFS device, request the reference clock and turn on
+      CLK_CG (cleared by every HCE cycle), then stop the controller so the
+      generic driver's HCE 1->0->1 sequence can initialize the UniPro.
+    - PostHce: wait for the controller initialization sequence and set the
+      auto-hibernate idle timer.
     - PreLinkStartup: take the UniPro out of low power mode, disable host
-      TX LCC and disable deep stall (ufs_mtk_pre_link).
+      TX LCC, disable deep stall (ufs_mtk_pre_link) and clear stale UIC
+      errors before the generic link startup.
+    - PostLinkStartup: enable UniPro clock gating (ufs_mtk_post_link).
 
   @param[in]     ControllerHandle  Handle of the UFS controller.
   @param[in]     CallbackPhase     When the callback is invoked.
@@ -847,6 +1021,22 @@ MtkUfsHcPlatformCallback (
 
     case EdkiiUfsHcPreLinkStartup:
       //
+      // Drop any UIC error latched by the previous link attempt before the
+      // pre-link sequence runs (UECPA in particular is left set by a
+      // failed link startup and blocks the next one).
+      //
+      MtkUfsClearHciErrors ();
+
+      //
+      // ufs_mtk_pre_link: log the local UniPro version.  The value is only
+      // diagnostic, but reading it also proves that the DME path works.
+      //
+      Value  = 0;
+      Result = 0;
+      Status = MtkUfsSendUicCommand (MTK_UIC_DME_GET, MTK_UIC_ARG_MIB (MTK_MIB_PA_LOCALVERINFO), 0, 0, &Result, &Value);
+      DEBUG ((DEBUG_INFO, "MtkUfsDxe: PreLink PA_LOCALVERINFO=0x%x -> %r (result=0x%x)\n", Value, Status, Result & 0xFF));
+
+      //
       // ufs_mtk_pre_link: UniPro out of low power mode.
       //
       Result = 0;
@@ -868,7 +1058,7 @@ MtkUfsHcPlatformCallback (
       Status = MtkUfsSendUicCommand (MTK_UIC_DME_GET, MTK_UIC_ARG_MIB (MTK_MIB_VS_SAVEPOWERCONTROL), 0, 0, &Result, &Value);
       DEBUG ((DEBUG_INFO, "MtkUfsDxe: PreLink DME_GET(0xD0A6) -> %r (result=0x%x val=0x%x)\n", Status, Result & 0xFF, Value));
       if (!EFI_ERROR (Status) && ((Result & 0xFF) == 0)) {
-        Value  &= ~(UINT32)BIT6;
+        Value  &= ~(UINT32)MTK_SAVEPOWER_DEEP_STALL;
         Status  = MtkUfsSendUicCommand (MTK_UIC_DME_SET, MTK_UIC_ARG_MIB (MTK_MIB_VS_SAVEPOWERCONTROL), 0, Value, &Result, NULL);
         DEBUG ((DEBUG_INFO, "MtkUfsDxe: PreLink DME_SET(0xD0A6)=0x%x -> %r (result=0x%x)\n", Value, Status, Result & 0xFF));
       }
@@ -888,9 +1078,23 @@ MtkUfsHcPlatformCallback (
       Status = MtkUfsSendUicCommand (MTK_UIC_DME_LINK_STARTUP, 0, 0, 0, &Result, NULL);
       DEBUG ((DEBUG_INFO, "MtkUfsDxe: PreLink warm-up link startup #2 -> %r (result=0x%x)\n", Status, Result & 0xFF));
 
+      //
+      // The warm-up attempts are intentionally allowed to fail (the link
+      // may already be up from LK and then reports a PHY adapter error).
+      // Clear whatever they latched so the generic driver's link startup
+      // and the first NOP/query command start from a clean status.
+      //
+      MtkUfsClearHciErrors ();
       break;
 
     case EdkiiUfsHcPostLinkStartup:
+      //
+      // ufs_mtk_post_link: enable UniPro clock gating.  This runs after
+      // the NOP and fDeviceInit handshake, so report a failure but never
+      // fail the boot for an optional power optimisation.
+      //
+      MtkUfsClearHciErrors ();
+      MtkUfsPostLink ();
       break;
 
     default:
@@ -905,9 +1109,11 @@ MtkUfsHcPlatformCallback (
 //
 STATIC EDKII_UFS_HC_PLATFORM_PROTOCOL  mMtkUfsHcPlatform = {
   EDKII_UFS_HC_PLATFORM_PROTOCOL_VERSION,
-  NULL,
+  MtkUfsOverrideHcInfo,
   MtkUfsHcPlatformCallback,
-  EdkiiUfsCardRefClkFreq26Mhz
+  EdkiiUfsCardRefClkFreq26Mhz,
+  FALSE,
+  FALSE
 };
 
 /**

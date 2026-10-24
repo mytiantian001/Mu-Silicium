@@ -27,6 +27,7 @@
 [LibraryClasses]
   ArmSmcLib
   BaseLib
+  BaseMemoryLib
   CacheMaintenanceLib
   DebugLib
   DevicePathLib

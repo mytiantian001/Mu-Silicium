@@ -41,6 +41,7 @@ UFS_PASS_THRU_PRIVATE_DATA  gUfsPassThruTemplate = {
   0,                                                                                                                                               // TaskTag
   0,                                                                                                                                               // UtpTrlBase
   0,                                                                                                                                               // Nutrs
+  0,                                                                                                                                               // SlotBusy
   0,                                                                                                                                               // TrlMapping
   0,                                                                                                                                               // UtpTmrlBase
   0,                                                                                                                                               // Nutmrs

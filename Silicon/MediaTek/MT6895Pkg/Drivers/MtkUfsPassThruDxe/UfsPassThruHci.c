@@ -134,6 +134,86 @@ UfsWaitMemSet (
 }
 
 /**
+  Read the OCS field of a transfer request descriptor.
+
+  The descriptor rings are Normal Non-Cacheable memory that the controller
+  updates asynchronously.  The OCS field is a bitfield in a packed structure
+  whose address cannot be taken, so read the whole DW2 with a volatile
+  access; otherwise the compiler is free to hoist the load out of a polling
+  loop.
+
+  @param[in] Trd  Transfer request descriptor.
+
+  @return The 8-bit OCS value.
+**/
+STATIC
+UINT8
+UfsReadTrdOcs (
+  IN  UTP_TRD  *Trd
+  )
+{
+  return (UINT8)(((volatile UINT32 *)Trd)[2] & 0xFF);
+}
+
+/**
+  Wait until a UTP transfer request descriptor reports completion.
+
+  UTRLDBR is a doorbell: the host controller clears a bit as soon as it
+  fetches that request, not when the request finishes.  Waiting for the
+  doorbell therefore returns while the device is still working and the
+  caller reads the initial 0xF OCS value.  Completion is reported by
+  IS.UTRCS and by the OCS field of the descriptor itself; poll the OCS of
+  the descriptor (the rings are in Normal Non-Cacheable memory) and
+  acknowledge the shared IS.UTRCS bit once it is set.
+
+  @param[in] Private   The UFS pass-thru private data.
+  @param[in] Trd       Transfer request descriptor to wait for.
+  @param[in] Timeout   Timeout in 100 ns units; 0 means wait forever.
+
+  @retval EFI_SUCCESS  The request completed.
+  @retval EFI_TIMEOUT  The request did not complete in time.
+**/
+EFI_STATUS
+UfsWaitTrlSlotComplete (
+  IN  UFS_PASS_THRU_PRIVATE_DATA  *Private,
+  IN  UTP_TRD                     *Trd,
+  IN  UINT64                      Timeout
+  )
+{
+  UINT32   Value;
+  UINT64   Delay;
+  BOOLEAN  InfiniteWait;
+
+  if ((Private == NULL) || (Trd == NULL)) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  InfiniteWait = (BOOLEAN)(Timeout == 0);
+  Delay        = DivU64x32 (Timeout, 10) + 1;
+
+  do {
+    if (UfsReadTrdOcs (Trd) != UFS_HC_TRD_OCS_INIT_VALUE) {
+      //
+      // Acknowledge the completion status.  It is shared by all slots, so
+      // leave it alone if another request has already consumed it.
+      //
+      if (!EFI_ERROR (UfsMmioRead32 (Private, UFS_HC_IS_OFFSET, &Value)) &&
+          ((Value & UFS_HC_IS_UTRCS) != 0))
+      {
+        UfsMmioWrite32 (Private, UFS_HC_IS_OFFSET, UFS_HC_IS_UTRCS);
+      }
+
+      return EFI_SUCCESS;
+    }
+
+    MicroSecondDelay (1);
+    Delay--;
+  } while (InfiniteWait || (Delay > 0));
+
+  return EFI_TIMEOUT;
+}
+
+/**
   Dump UIC command execution result for debugging.
 
   @param[in]   UicOpcode  The executed UIC opcode.
@@ -729,22 +809,21 @@ UfsFindAvailableSlotInTrl (
   OUT UINT8                          *Slot
   )
 {
-  UINT8       Nutrs;
-  UINT8       Index;
-  UINT32      Data;
-  EFI_STATUS  Status;
+  UINT8  Nutrs;
+  UINT8  Index;
 
   ASSERT ((Private != NULL) && (Slot != NULL));
 
-  Status = UfsMmioRead32 (Private, UFS_HC_UTRLDBR_OFFSET, &Data);
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
-
   Nutrs = (UINT8)((Private->UfsHcInfo.Capabilities & UFS_HC_CAP_NUTRS) + 1);
 
+  //
+  // The doorbell bit is cleared when the controller fetches a request, so
+  // UTRLDBR cannot tell whether a slot is still owned by software.  Track
+  // the slots ourselves: async requests stay busy until their OCS is
+  // reported, and a slot may only be reused after that.
+  //
   for (Index = 0; Index < Nutrs; Index++) {
-    if ((Data & (BIT0 << Index)) == 0) {
+    if ((Private->SlotBusy & (BIT0 << Index)) == 0) {
       *Slot = Index;
       return EFI_SUCCESS;
     }
@@ -770,6 +849,8 @@ UfsStartExecCmd (
   UINT32      Hcs;
   EFI_STATUS  Status;
 
+  Private->SlotBusy |= BIT0 << Slot;
+
   //
   // Pearl: the inherited controller state is fragile. The previous boot
   // ended with UTRLRSR=0 (the transfer request list stopped) and the
@@ -782,6 +863,17 @@ UfsStartExecCmd (
   }
 
   Status = UfsMmioRead32 (Private, UFS_HC_STATUS_OFFSET, &Hcs);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  //
+  // Pearl: clear a stale transfer-completion status before ringing the
+  // doorbell.  Waiting on IS.UTRCS without clearing it would return
+  // immediately because of a completion left over from an earlier
+  // command, and the caller would read an OCS that still holds 0xF.
+  //
+  Status = UfsMmioWrite32 (Private, UFS_HC_IS_OFFSET, UFS_HC_IS_UTRCS);
   if (EFI_ERROR (Status)) {
     return Status;
   }
@@ -829,6 +921,8 @@ UfsStopExecCmd (
 {
   UINT32      Data;
   EFI_STATUS  Status;
+
+  Private->SlotBusy &= ~(BIT0 << Slot);
 
   Status = UfsMmioRead32 (Private, UFS_HC_UTRLDBR_OFFSET, &Data);
   if (EFI_ERROR (Status)) {
@@ -974,7 +1068,7 @@ UfsSendDmRequestRetry (
   //
   // Wait for the completion of the transfer request.
   //
-  Status = UfsWaitMemSet (Private, UFS_HC_UTRLDBR_OFFSET, BIT0, 0, Packet->Timeout);
+  Status = UfsWaitTrlSlotComplete (Private, Trd, Packet->Timeout);
   if (EFI_ERROR (Status)) {
     goto Exit;
   }
@@ -1328,7 +1422,7 @@ UfsExecNopCmds (
   //
   // Wait for the completion of the transfer request.
   //
-  Status = UfsWaitMemSet (Private, UFS_HC_UTRLDBR_OFFSET, BIT0 << Slot, 0, UFS_TIMEOUT);
+  Status = UfsWaitTrlSlotComplete (Private, Trd, UFS_TIMEOUT);
   if (EFI_ERROR (Status)) {
     goto Exit;
   }
@@ -1605,7 +1699,7 @@ UfsExecScsiCmds (
   //
   // Wait for the completion of the transfer request.
   //
-  Status = UfsWaitMemSet (Private, UFS_HC_UTRLDBR_OFFSET, BIT0 << TransReq->Slot, 0, Packet->Timeout);
+  Status = UfsWaitTrlSlotComplete (Private, TransReq->Trd, Packet->Timeout);
   if (EFI_ERROR (Status)) {
     goto Exit;
   }
@@ -2478,7 +2572,7 @@ ProcessAsyncTaskList (
 
       SlotsMap |= BIT0 << TransReq->Slot;
 
-      Status = UfsMmioRead32 (Private, UFS_HC_UTRLDBR_OFFSET, &Value);
+      Status = UfsMmioRead32 (Private, UFS_HC_IS_OFFSET, &Value);
       if (EFI_ERROR (Status)) {
         //
         // TODO: Should find/add a proper host adapter return status for this
@@ -2490,7 +2584,12 @@ ProcessAsyncTaskList (
         continue;
       }
 
-      if ((Value & (BIT0 << TransReq->Slot)) != 0) {
+      //
+      // The doorbell bit is cleared when the controller fetches the
+      // request, so it cannot be used as a completion indicator.  The
+      // descriptor's OCS field is still 0xF until the request finishes.
+      //
+      if (UfsReadTrdOcs (TransReq->Trd) == UFS_HC_TRD_OCS_INIT_VALUE) {
         //
         // Scsi cmd not finished yet.
         //
@@ -2508,7 +2607,13 @@ ProcessAsyncTaskList (
         }
       } else {
         //
-        // Scsi cmd finished.
+        // Scsi cmd finished.  Acknowledge the shared completion bit; the
+        // per-slot OCS above is what actually decides completion.
+        //
+        if ((Value & UFS_HC_IS_UTRCS) != 0) {
+          UfsMmioWrite32 (Private, UFS_HC_IS_OFFSET, UFS_HC_IS_UTRCS);
+        }
+
         //
         // Get sense data if exists
         //
