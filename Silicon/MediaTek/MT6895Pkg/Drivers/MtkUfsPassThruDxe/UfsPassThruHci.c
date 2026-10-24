@@ -203,6 +203,11 @@ UfsWaitTrlSlotComplete (
         UfsMmioWrite32 (Private, UFS_HC_IS_OFFSET, UFS_HC_IS_UTRCS);
       }
 
+      //
+      // Order the completion observation before the caller reads the
+      // response UPIU / PRDT data written by the controller.
+      //
+      MemoryFence ();
       return EFI_SUCCESS;
     }
 
@@ -2613,6 +2618,8 @@ ProcessAsyncTaskList (
         if ((Value & UFS_HC_IS_UTRCS) != 0) {
           UfsMmioWrite32 (Private, UFS_HC_IS_OFFSET, UFS_HC_IS_UTRCS);
         }
+
+        MemoryFence ();
 
         //
         // Get sense data if exists
