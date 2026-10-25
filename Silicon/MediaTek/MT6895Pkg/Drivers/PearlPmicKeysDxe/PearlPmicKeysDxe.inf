@@ -1,0 +1,32 @@
+## @file
+# Pearl MT6363 PMIC key diagnostic application.
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = PearlPmicKeysDxe
+  FILE_GUID                      = 8A3F6D52-1C47-4E90-B6D3-5F2A9C7E4B18
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = PearlPmicKeysEntryPoint
+
+[Sources]
+  PearlPmicKeysDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  IoLib
+  PrintLib
+  TimerLib
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiLib
+
+[Depex]
+  TRUE

@@ -52,6 +52,11 @@
 //   cluster 1: 3x Cortex-A78  -> 0x100..0x102
 //   cluster 2: 1x Cortex-A78  -> 0x200
 //
-#define PEARL_MPIDR(i)  (((i) < 4) ? (i) : (((i) < 7) ? (0x100 + (i) - 4) : 0x200))
+//
+// MT6895 DTS: cpu0..cpu7 reg = 0x0000, 0x0100, ... 0x0700, i.e. the core
+// number sits in Aff1.  Windows matches each GICC entry against MPIDR, so a
+// wrong layout here makes it fault before the first thread exists.
+//
+#define PEARL_MPIDR(i)  (0x10000 + (i) * 0x100)
 
 #endif // __PEARL_ACPITABLES_H__

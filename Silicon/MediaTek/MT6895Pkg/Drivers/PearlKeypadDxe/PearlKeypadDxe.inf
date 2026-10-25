@@ -1,0 +1,31 @@
+## @file
+# Pearl KPD raw key diagnostic application.
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = PearlKeypadDxe
+  FILE_GUID                      = 4C7E2B91-6D35-4A08-9F1C-2B8E5A7D3C64
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = PearlKeypadEntryPoint
+
+[Sources]
+  PearlKeypadDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  IoLib
+  PrintLib
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiLib
+
+[Depex]
+  TRUE

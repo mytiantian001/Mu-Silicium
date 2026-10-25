@@ -63,6 +63,9 @@
   #
   MT6895Pkg/Drivers/MtkUfsDxe/MtkUfsDxe.inf
   MT6895Pkg/Drivers/MtkUfsPassThruDxe/UfsPassThruDxe.inf
+  MT6895Pkg/Drivers/PearlUfsDiagDxe/PearlUfsDiagDxe.inf
+  MT6895Pkg/Drivers/PearlKeypadDxe/PearlKeypadDxe.inf
+  MT6895Pkg/Drivers/PearlPmicKeysDxe/PearlPmicKeysDxe.inf
 
   #
   # USB host: MediaTek platform bring-up (MT6375 + SSUSB)

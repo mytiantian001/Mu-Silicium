@@ -23,7 +23,7 @@ EFI_ACPI_6_3_FIXED_ACPI_DESCRIPTION_TABLE Fadt = {
   0,                                                                        // UINT32     FirmwareCtrl
   0,                                                                        // UINT32     Dsdt
   EFI_ACPI_RESERVED_BYTE,                                                   // UINT8      Reserved0
-  EFI_ACPI_6_3_PM_PROFILE_APPLIANCE_PC,                                     // UINT8      PreferredPmProfile
+  EFI_ACPI_6_3_PM_PROFILE_TABLET,                                           // UINT8      PreferredPmProfile
   0,                                                                        // UINT16     SciInt
   0,                                                                        // UINT32     SmiCmd
   0,                                                                        // UINT8      AcpiEnable
@@ -57,6 +57,7 @@ EFI_ACPI_6_3_FIXED_ACPI_DESCRIPTION_TABLE Fadt = {
   0,                                                                        // UINT8      Century
   EFI_ACPI_RESERVED_WORD,                                                   // UINT16     IaPcBootArch (Reserved on ARM)
   EFI_ACPI_RESERVED_BYTE,                                                   // UINT8      Reserved1
+  EFI_ACPI_6_3_HW_REDUCED_ACPI | EFI_ACPI_6_3_LOW_POWER_S0_IDLE_CAPABLE |
   EFI_ACPI_6_3_WBINVD | EFI_ACPI_6_3_SLP_BUTTON |                           // UINT32     Flags
   EFI_ACPI_6_3_HW_REDUCED_ACPI,
   NULL_GAS,                                                                 // EFI_ACPI_6_3_GENERIC_ADDRESS_STRUCTURE  ResetReg

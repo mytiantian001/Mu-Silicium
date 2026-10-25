@@ -901,7 +901,7 @@ UfsStartExecCmd (
   }
 
   DEBUG ((
-    DEBUG_INFO,
+    DEBUG_VERBOSE,
     "MtkUfsPassThru: ring slot %d UTRLRSR=0x%x HCS=0x%x\n",
     Slot,
     Data,

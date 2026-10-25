@@ -1,0 +1,27 @@
+## @file
+# Platform boot options for the Xiaomi Redmi Note 12T Pro (pearl).
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = PlatformBootOptionsLib
+  FILE_GUID                      = 6C1A7E42-3D5B-4F08-9A17-2E4C8D6B0A51
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = PlatformBootOptionsLib
+
+[Sources]
+  PlatformBootOptionsLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  ShellPkg/ShellPkg.dec
+  SiliciumPkg/SiliciumPkg.dec
+
+[Guids]
+  gUefiShellFileGuid
+
+[LibraryClasses]
+  MemoryAllocationLib

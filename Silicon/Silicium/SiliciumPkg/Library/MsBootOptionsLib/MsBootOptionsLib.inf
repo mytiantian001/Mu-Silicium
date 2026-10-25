@@ -18,6 +18,7 @@
   MdePkg/MdePkg.dec
   PcBdsPkg/PcBdsPkg.dec
   MdeModulePkg/MdeModulePkg.dec
+  ShellPkg/ShellPkg.dec
   SiliciumPkg/SiliciumPkg.dec
 
 [LibraryClasses]
@@ -28,17 +29,19 @@
   UefiBootServicesTableLib
   PlatformBootOptionsLib
   MemoryAllocationLib
-  UefiLib
   PcdLib
+  UefiLib
 
 [Guids]
   gMsBootPolicyFileGuid
+  gUefiShellFileGuid
 
 [Protocols]
   gEfiLoadedImageProtocolGuid
   gEfiFirmwareVolume2ProtocolGuid
 
 [FixedPcd]
+  gSiliciumPkgTokenSpaceGuid.PcdUefiShellBootFirst
   gSiliciumPkgTokenSpaceGuid.PcdUfpLoaderFile
 
 [Pcd]

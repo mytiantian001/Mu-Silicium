@@ -31,6 +31,8 @@
   #
   INF MT6895Pkg/Drivers/MtkUfsDxe/MtkUfsDxe.inf
   INF MT6895Pkg/Drivers/MtkUfsPassThruDxe/UfsPassThruDxe.inf
+  INF SiliciumPkg/Drivers/KeypadDeviceDxe/KeypadDeviceDxe.inf
+  INF SiliciumPkg/Drivers/KeypadDxe/KeypadDxe.inf
   INF MdeModulePkg/Bus/Scsi/ScsiBusDxe/ScsiBusDxe.inf
   INF MdeModulePkg/Bus/Scsi/ScsiDiskDxe/ScsiDiskDxe.inf
 
@@ -46,5 +48,7 @@
 !else
   INF SiliciumPkg/Drivers/SimpleFbDxe/SimpleFbDxe.inf
 !endif
+
+  INF pearlPkg/Drivers/HandoffQuiesceDxe/HandoffQuiesceDxe.inf
 
   INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf

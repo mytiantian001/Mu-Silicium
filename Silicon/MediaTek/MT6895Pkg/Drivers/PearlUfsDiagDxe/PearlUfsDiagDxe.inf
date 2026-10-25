@@ -1,0 +1,44 @@
+## @file
+# Pearl UFS/FAT diagnostic driver.
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = PearlUfsDiagDxe
+  FILE_GUID                      = 9B6E2A41-7C58-4D13-8F2A-1E5B7C9D3A62
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = PearlUfsDiagEntryPoint
+
+[Sources]
+  PearlUfsDiagDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  MT6895Pkg/MT6895Pkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  DebugLib
+  DevicePathLib
+  MemoryAllocationLib
+  PrintLib
+  UefiBootManagerLib
+  UefiBootServicesTableLib
+  UefiApplicationEntryPoint
+  UefiLib
+
+[Guids]
+  gEfiFileInfoGuid
+  gEfiFileSystemInfoGuid
+
+[Protocols]
+  gEfiBlockIoProtocolGuid
+  gEfiSimpleFileSystemProtocolGuid
+
+[Depex]
+  TRUE

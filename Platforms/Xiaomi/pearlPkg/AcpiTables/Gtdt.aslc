@@ -15,10 +15,12 @@
 #include "AcpiTables.h"
 
 //
-// Level-triggered (mode = 0), active-low (polarity = 1).
+// Level-triggered (mode = 0), active-high (polarity = 0), matching the DTS
+// (GIC_PPI 13/14/11/10 with IRQ_TYPE_LEVEL_HIGH) and the yunluo GTDT.
+// Getting the polarity backwards makes Windows program the timer PPI with the
+// wrong trigger and the architected timer never fires.
 //
-#define GTDT_GTIMER_FLAGS \
-  (EFI_ACPI_6_3_GTDT_TIMER_FLAG_TIMER_INTERRUPT_POLARITY)
+#define GTDT_GTIMER_FLAGS  (0)
 
 EFI_ACPI_6_3_GENERIC_TIMER_DESCRIPTION_TABLE Gtdt = {
   ACPI_HEADER (

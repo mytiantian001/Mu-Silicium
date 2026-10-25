@@ -74,6 +74,9 @@ READ_LOCK_STATUS   = TRUE
   INF MdeModulePkg/Universal/Acpi/AcpiPlatformDxe/AcpiPlatformDxe.inf
   INF RuleOverride = ACPITABLE pearlPkg/AcpiTables/AcpiTables.inf
 
+  # UEFI Shell for UFS/FAT and Windows PE diagnostics.
+  INF ShellPkg/Application/Shell/Shell.inf
+
   !include MediaTekPkg/Extra.fdf.inc
 
 [FV.FVMAIN_COMPACT]

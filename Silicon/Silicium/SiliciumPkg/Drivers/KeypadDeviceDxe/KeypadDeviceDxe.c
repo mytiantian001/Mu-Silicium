@@ -15,10 +15,15 @@ InitializeKeypadDevice (
   IN EFI_HANDLE        ImageHandle,
   IN EFI_SYSTEM_TABLE *SystemTable)
 {
-  EFI_STATUS Status;
+  EFI_STATUS  Status;
+  EFI_HANDLE  Handle;
 
-  // Install Keypad Device Protocol in a new Handle
-  Status = gBS->InstallMultipleProtocolInterfaces(&ImageHandle, &gKeypadDeviceProtocolGuid, &mKeypadDevice, &gEfiDevicePathProtocolGuid, &KeypadDevicePath, NULL);
+  Handle = NULL;
+
+  // Install Keypad Device Protocol on a dedicated controller handle so the
+  // KeypadDxe driver binding can connect to it (the driver image handle is not
+  // a controllable device on all platforms).
+  Status = gBS->InstallMultipleProtocolInterfaces(&Handle, &gKeypadDeviceProtocolGuid, &mKeypadDevice, &gEfiDevicePathProtocolGuid, &KeypadDevicePath, NULL);
   if (EFI_ERROR (Status)) {
     DEBUG ((EFI_D_ERROR, "Failed to Register Keypad Device Protocol!\n"));
     ASSERT_EFI_ERROR(Status);

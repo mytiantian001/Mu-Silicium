@@ -94,8 +94,14 @@
   gEfiMdePkgTokenSpaceGuid.PcdPlatformBootTimeOut|0
 
   #
-  # Boot log: errors, warnings and info (UFS link-up detail) - use
-  # 0x80000000 for error-only builds when a crash dump must stay visible.
+  # Normal boot order. The keypad driver now provides Volume Up, so the
+  # Boot Manager can be entered with Volume Up.
+  #
+  gSiliciumPkgTokenSpaceGuid.PcdUefiShellBootFirst|FALSE
+
+  #
+  # Boot log: error-only for the interactive Boot Manager. Use 0x8000104F
+  # when UFS/link-up diagnostics are needed.
   #
   gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000046
 
@@ -115,6 +121,24 @@
   #
   UefiScsiLib|MdePkg/Library/UefiScsiLib/UefiScsiLib.inf
 
+  #
+  # Pearl keypad: volume-down on the MT6895 KPD, volume-up/power on MT6363.
+  #
+  KeypadDeviceLib|pearlPkg/Library/KeypadDeviceLib/KeypadDeviceLib.inf
+
+  #
+  # Add the UEFI Shell to the Boot Manager for UFS/FAT diagnostics.
+  #
+  PlatformBootOptionsLib|pearlPkg/Library/PlatformBootOptionsLib/PlatformBootOptionsLib.inf
+
+  #
+  # UEFI Shell dependencies.
+  #
+  ShellLib|ShellPkg/Library/UefiShellLib/UefiShellLib.inf
+  ShellCommandLib|ShellPkg/Library/UefiShellCommandLib/UefiShellCommandLib.inf
+  HandleParsingLib|ShellPkg/Library/UefiHandleParsingLib/UefiHandleParsingLib.inf
+  OrderedCollectionLib|MdePkg/Library/BaseOrderedCollectionRedBlackTreeLib/BaseOrderedCollectionRedBlackTreeLib.inf
+
 [Components]
 !if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
   #
@@ -129,6 +153,13 @@
   pearlPkg/AcpiTables/AcpiTables.inf
 
   #
+  # Mask every GIC source and disarm the EL1 architected timers just before
+  # ExitBootServices, so Windows inherits a CPU with nothing armed
+  # (port of yunluoPkg/Drivers/HandoffQuiesceDxe).
+  #
+  pearlPkg/Drivers/HandoffQuiesceDxe/HandoffQuiesceDxe.inf
+
+  #
   # USB host: non-discoverable XHCI registration + stock XHCI driver
   #
   MdeModulePkg/Bus/Pci/NonDiscoverablePciDeviceDxe/NonDiscoverablePciDeviceDxe.inf
@@ -140,3 +171,15 @@
   #
   MdeModulePkg/Bus/Scsi/ScsiBusDxe/ScsiBusDxe.inf
   MdeModulePkg/Bus/Scsi/ScsiDiskDxe/ScsiDiskDxe.inf
+
+  #
+  # Keypad (volume down on KPD, volume up/power on MT6363) and its text input
+  # front-end.
+  #
+  SiliciumPkg/Drivers/KeypadDeviceDxe/KeypadDeviceDxe.inf
+  SiliciumPkg/Drivers/KeypadDxe/KeypadDxe.inf
+
+  #
+  # UEFI Shell for UFS/FAT and Windows PE diagnostics.
+  #
+  ShellPkg/Application/Shell/Shell.inf

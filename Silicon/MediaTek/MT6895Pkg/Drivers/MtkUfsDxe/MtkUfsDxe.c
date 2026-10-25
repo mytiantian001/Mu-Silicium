@@ -125,6 +125,31 @@
 //
 #define MTK_UIC_ARG_MIB(Mib)  ((UINT32)(Mib) << 16)
 
+//
+// UniPro power-mode attributes (unipro.h / ufs-mediatek.h).  LINK_STARTUP
+// leaves the link in PWM-G1 and nothing in the generic pass-thru driver asks
+// for a power mode change, so the data path stays at roughly a megabyte per
+// second until the platform driver does it here.
+//
+#define MTK_MIB_PA_ACTIVETXDATALANES  0x1560
+#define MTK_MIB_PA_TXGEAR             0x1568
+#define MTK_MIB_PA_TXTERMINATION      0x1569
+#define MTK_MIB_PA_HSSERIES           0x156A
+#define MTK_MIB_PA_PWRMODE            0x1571
+#define MTK_MIB_PA_ACTIVERXDATALANES  0x1580
+#define MTK_MIB_PA_RXGEAR             0x1583
+#define MTK_MIB_PA_RXTERMINATION      0x1584
+
+//
+// UniPro power mode encoding: FAST_MODE is 1 and PA_PWRMODE = RX << 4 | TX,
+// so HS/HS (what ufshcd_change_power_mode() calls FAST_MODE) is 0x11.
+// PA_HSSERIES bit 4 selects HS-G1.
+//
+#define MTK_UFS_PWRMODE_HS      0x11
+#define MTK_UFS_HSSERIES_HS_G1  0x10
+
+#define MTK_IS_UPMCS  BIT4
+
 typedef struct {
   UINT32                              Signature;
   EDKII_UFS_HOST_CONTROLLER_PROTOCOL  UfsHcProtocol;
@@ -251,7 +276,7 @@ MtkUfsAllocateBuffer (
                   );
   ZeroMem (*HostAddress, EFI_PAGES_TO_SIZE (Pages));
   DEBUG ((
-    DEBUG_INFO,
+    DEBUG_VERBOSE,
     "MtkUfsDxe: AllocateBuffer(0x%lx, %d pages) normal-nc: %r\n",
     (UINT64)(UINTN)*HostAddress,
     (UINT32)Pages,
@@ -792,6 +817,157 @@ MtkUfsClearHciErrors (
 }
 
 /**
+  DME_SET of a local UniPro attribute.
+
+  The value travels in UICCMDARG3, exactly like the result of DME_GET; the
+  controller ignores UICCMDARG2 for DME_SET.  Some attributes are read-only
+  or rejected by the device, so the result code is reported and left to the
+  caller to judge.
+**/
+STATIC
+EFI_STATUS
+MtkUfsDmeSet (
+  IN UINT32  Mib,
+  IN UINT32  Value
+  )
+{
+  EFI_STATUS  Status;
+  UINT32      Result;
+
+  Result = 0;
+  Status = MtkUfsSendUicCommand (
+             MTK_UIC_DME_SET,
+             MTK_UIC_ARG_MIB (Mib),
+             0,
+             Value,
+             &Result,
+             NULL
+             );
+  if (EFI_ERROR (Status) || ((Result & 0xFF) != 0)) {
+    DEBUG ((
+      DEBUG_INFO,
+      "MtkUfsDxe: DME_SET(0x%x)=0x%x code=0x%x %r\n",
+      Mib,
+      Value,
+      Result & 0xFF,
+      Status
+      ));
+    if (!EFI_ERROR (Status)) {
+      Status = EFI_DEVICE_ERROR;
+    }
+  }
+
+  return Status;
+}
+
+/**
+  Log one UniPro attribute as a small bit bar.
+
+  The value is also printed in hex, but the bar is what stays readable in a
+  photograph of the scrolling framebuffer console.
+**/
+STATIC
+VOID
+MtkUfsLogPwrAttr (
+  IN CONST CHAR8  *Name,
+  IN UINT32       Mib
+  )
+{
+  CHAR8       Bar[9];
+  UINT32      Value;
+  UINT32      Result;
+  UINTN       Index;
+  EFI_STATUS  Status;
+
+  Value  = 0;
+  Result = 0;
+  Status = MtkUfsSendUicCommand (MTK_UIC_DME_GET, MTK_UIC_ARG_MIB (Mib), 0, 0, &Result, &Value);
+  if (EFI_ERROR (Status) || ((Result & 0xFF) != 0)) {
+    DEBUG ((DEBUG_INFO, "MtkUfsDxe: GET %a failed code=0x%x %r\n", Name, Result & 0xFF, Status));
+    return;
+  }
+
+  for (Index = 0; Index < 8; Index++) {
+    Bar[Index] = (CHAR8)(((Value >> Index) & 1) != 0 ? '#' : '.');
+  }
+
+  Bar[8] = '\0';
+  DEBUG ((DEBUG_INFO, "MtkUfsDxe: %a=0x%x [%a]\n", Name, Value, Bar));
+}
+
+/**
+  Move the UniPro link from PWM-G1 to HS-G1 after link startup.
+
+  This mirrors ufshcd_change_power_mode(): every capability attribute is best
+  effort (the kernel ignores their failures too) and only the PA_PWRMODE
+  write decides the outcome.  Completion is signalled asynchronously through
+  IS.UPMCS, which is write-one-to-clear.
+**/
+STATIC
+EFI_STATUS
+MtkUfsChangePwrModeHs (
+  VOID
+  )
+{
+  UINTN       Base;
+  EFI_STATUS  Status;
+  UINT32      Value;
+  UINT32      Retry;
+
+  Base = mMtkUfsHcPrivate.UfsHcBase;
+
+  MtkUfsLogPwrAttr ("pwrmode", MTK_MIB_PA_PWRMODE);
+  MtkUfsLogPwrAttr ("hsseries", MTK_MIB_PA_HSSERIES);
+
+  MtkUfsDmeSet (MTK_MIB_PA_TXGEAR, 1);
+  MtkUfsDmeSet (MTK_MIB_PA_RXGEAR, 1);
+  MtkUfsDmeSet (MTK_MIB_PA_ACTIVETXDATALANES, 1);
+  MtkUfsDmeSet (MTK_MIB_PA_ACTIVERXDATALANES, 1);
+  MtkUfsDmeSet (MTK_MIB_PA_TXTERMINATION, 1);
+  MtkUfsDmeSet (MTK_MIB_PA_RXTERMINATION, 1);
+  MtkUfsDmeSet (MTK_MIB_PA_HSSERIES, MTK_UFS_HSSERIES_HS_G1);
+
+  //
+  // Clear a stale UIC power-mode-completion status so the poll below only
+  // sees the change requested here.
+  //
+  MmioWrite32 (Base + MTK_REG_UFS_IS, MTK_IS_UPMCS);
+
+  Status = MtkUfsDmeSet (MTK_MIB_PA_PWRMODE, MTK_UFS_PWRMODE_HS);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_WARN, "MtkUfsDxe: PA_PWRMODE=HS-G1 request failed: %r\n", Status));
+    return Status;
+  }
+
+  for (Retry = 500; Retry > 0; Retry--) {
+    Value = MmioRead32 (Base + MTK_REG_UFS_IS);
+    if ((Value & MTK_IS_UPMCS) != 0) {
+      MmioWrite32 (Base + MTK_REG_UFS_IS, MTK_IS_UPMCS);
+      break;
+    }
+
+    gBS->Stall (1000);
+  }
+
+  if (Retry == 0) {
+    DEBUG ((DEBUG_WARN, "MtkUfsDxe: PA_PWRMODE change timed out\n"));
+    return EFI_TIMEOUT;
+  }
+
+  DEBUG ((
+    DEBUG_INFO,
+    "MtkUfsDxe: PA_PWRMODE=HS-G1 done upmcrs=0x%x\n",
+    (MmioRead32 (Base + MTK_REG_UFS_HCS) >> 8) & 0x7
+    ));
+  MtkUfsLogPwrAttr ("HS pwrmode", MTK_MIB_PA_PWRMODE);
+  MtkUfsLogPwrAttr ("HS hsseries", MTK_MIB_PA_HSSERIES);
+  MtkUfsLogPwrAttr ("HS txgear", MTK_MIB_PA_TXGEAR);
+  MtkUfsLogPwrAttr ("HS txterm", MTK_MIB_PA_TXTERMINATION);
+
+  return EFI_SUCCESS;
+}
+
+/**
   Implement ufs_mtk_post_link(): enable the UniPro clock-gating features.
 
   This is a power optimisation only.  A DME failure must not abort the boot,
@@ -1095,6 +1271,14 @@ MtkUfsHcPlatformCallback (
       //
       MtkUfsClearHciErrors ();
       MtkUfsPostLink ();
+
+      //
+      // The link is up and the device has answered the query commands, but
+      // UniPro still runs in PWM-G1.  Request HS-G1 before the SCSI stack
+      // starts issuing bulk reads; a failure here is logged but never fails
+      // the boot.
+      //
+      MtkUfsChangePwrModeHs ();
       break;
 
     default:
@@ -1134,7 +1318,7 @@ MtkUfsDxeInitialize (
 {
   EFI_STATUS                 Status;
   UINT32                     Value;
-  MEMMAP_DEVICE_PATH  *MemMap;
+  VENDOR_DEVICE_PATH  *Vendor;
   EFI_DEVICE_PATH_PROTOCOL   *End;
 
   mMtkUfsHcPrivate.UfsHcBase = FixedPcdGet32 (PcdUfsHostControllerBase);
@@ -1172,19 +1356,17 @@ MtkUfsDxeInitialize (
   // a platform (non-PCI) controller must carry one; the PCI variant inherits
   // it from the PCI I/O stack.
   //
-  MemMap = AllocatePool (sizeof (MEMMAP_DEVICE_PATH) + sizeof (EFI_DEVICE_PATH_PROTOCOL));
-  if (MemMap == NULL) {
+  Vendor = AllocatePool (sizeof (VENDOR_DEVICE_PATH) + sizeof (EFI_DEVICE_PATH_PROTOCOL));
+  if (Vendor == NULL) {
     return EFI_OUT_OF_RESOURCES;
   }
 
-  MemMap->Header.Type    = HARDWARE_DEVICE_PATH;
-  MemMap->Header.SubType = HW_MEMMAP_DP;
-  SetDevicePathNodeLength (&MemMap->Header, sizeof (MEMMAP_DEVICE_PATH));
-  MemMap->MemoryType      = EfiMemoryMappedIO;
-  MemMap->StartingAddress = mMtkUfsHcPrivate.UfsHcBase;
-  MemMap->EndingAddress   = mMtkUfsHcPrivate.UfsHcBase + MTK_UFS_HC_MMIO_SIZE - 1;
+  Vendor->Header.Type    = HARDWARE_DEVICE_PATH;
+  Vendor->Header.SubType = HW_VENDOR_DP;
+  SetDevicePathNodeLength (&Vendor->Header, sizeof (VENDOR_DEVICE_PATH));
+  SetMem (&Vendor->Guid, sizeof (EFI_GUID), 0);
 
-  End = (EFI_DEVICE_PATH_PROTOCOL *)((UINTN)MemMap + sizeof (MEMMAP_DEVICE_PATH));
+  End = (EFI_DEVICE_PATH_PROTOCOL *)((UINTN)Vendor + sizeof (VENDOR_DEVICE_PATH));
   End->Type    = END_DEVICE_PATH_TYPE;
   End->SubType = END_ENTIRE_DEVICE_PATH_SUBTYPE;
   SetDevicePathNodeLength (End, sizeof (EFI_DEVICE_PATH_PROTOCOL));
@@ -1194,7 +1376,7 @@ MtkUfsDxeInitialize (
                   &gEdkiiUfsHostControllerProtocolGuid,
                   &mMtkUfsHcPrivate.UfsHcProtocol,
                   &gEfiDevicePathProtocolGuid,
-                  (EFI_DEVICE_PATH_PROTOCOL *)MemMap,
+                  (EFI_DEVICE_PATH_PROTOCOL *)Vendor,
                   &gEdkiiUfsHcPlatformProtocolGuid,
                   &mMtkUfsHcPlatform,
                   NULL

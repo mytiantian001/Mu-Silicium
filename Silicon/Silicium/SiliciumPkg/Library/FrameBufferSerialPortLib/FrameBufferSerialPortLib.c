@@ -238,6 +238,51 @@ GetFrameBufferMemory (
   return EFI_SUCCESS;
 }
 
+//
+// Global boot log captured at the SerialPortLib layer.  DEBUG output from
+// every module funnels through SerialPortWrite(), and each module links its
+// own copy of this library, so the buffer lives at a fixed physical address
+// instead of in static data.  MemoryMapLib reserves the range.
+//
+#define PEARL_LOG_ADDRESS  0x007F241000ULL
+#define PEARL_LOG_SIZE     0x00010000U
+#define PEARL_LOG_MAGIC    0x474F4C50U  // "PLOG"
+
+typedef struct {
+  UINT32  Magic;
+  UINT32  Head;
+  UINT32  Size;
+  UINT32  Reserved;
+} PEARL_LOG_HEADER;
+
+STATIC
+VOID
+PearlLogAppend (
+  IN CONST UINT8  *Buffer,
+  IN UINTN         NumberOfBytes
+  )
+{
+  volatile PEARL_LOG_HEADER  *Hdr;
+  volatile UINT8             *Data;
+  UINTN                      Capacity;
+  UINTN                      Index;
+
+  Hdr      = (volatile PEARL_LOG_HEADER *)(UINTN)PEARL_LOG_ADDRESS;
+  Capacity = PEARL_LOG_SIZE - sizeof (PEARL_LOG_HEADER);
+  Data     = (volatile UINT8 *)(UINTN)(PEARL_LOG_ADDRESS + sizeof (PEARL_LOG_HEADER));
+
+  if ((Hdr->Magic != PEARL_LOG_MAGIC) || (Hdr->Size != Capacity)) {
+    Hdr->Size  = Capacity;
+    Hdr->Head  = 0;
+    Hdr->Magic = PEARL_LOG_MAGIC;
+  }
+
+  for (Index = 0; Index < NumberOfBytes; Index++) {
+    Data[Hdr->Head % Capacity] = Buffer[Index];
+    Hdr->Head                  = Hdr->Head + 1;
+  }
+}
+
 UINTN
 EFIAPI
 SerialPortWrite (
@@ -247,6 +292,9 @@ SerialPortWrite (
   EFI_STATUS           Status;
   EFI_PHYSICAL_ADDRESS FbBase;
   UINT64               FbLength;
+
+  // Capture the byte stream before anything can fail below.
+  PearlLogAppend (Buffer, NumberOfBytes);
 
   // Get Frame Buffer Memory
   Status = GetFrameBufferMemory (&FbBase, &FbLength);

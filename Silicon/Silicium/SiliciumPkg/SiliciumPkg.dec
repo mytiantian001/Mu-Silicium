@@ -23,6 +23,11 @@
   gSiliciumPkgTokenSpaceGuid.PcdFrameBufferDelay|0|UINT32|0x0000A003
 
   #
+  # Boot Manager: register the UEFI Shell as the first boot option.
+  #
+  gSiliciumPkgTokenSpaceGuid.PcdUefiShellBootFirst|FALSE|BOOLEAN|0x0000A500
+
+  #
   # Timer
   #
   gSiliciumPkgTokenSpaceGuid.PcdTimerFreqOverwrite|0|UINT64|0x0000A100
