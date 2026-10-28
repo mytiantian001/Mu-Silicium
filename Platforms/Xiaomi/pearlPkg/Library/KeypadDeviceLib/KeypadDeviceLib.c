@@ -13,10 +13,10 @@
 #define KP_EN          0x0024
 
 #define PMIF_BASE        0x1C804000
-#define SPMI_SEND        0x0840
-#define SPMI_RDATA       0x0854
-#define SPMI_VLD_CLR     0x0864
-#define SPMI_STA         0x0868
+#define SPMI_SEND        0x0880  /* SWINF2: the channel pearl's MT6363 answers on */
+#define SPMI_RDATA       0x0894
+#define SPMI_VLD_CLR     0x08A4
+#define SPMI_STA         0x08A8
 
 #define SPMI_FSM_IDLE     0
 #define SPMI_FSM_WFVLDCLR 6
@@ -24,8 +24,8 @@
 #define MT6363_SID        4
 #define MT6363_TOPSTATUS  0x1E
 
-#define PMIC_POWER_BIT    BIT0
-#define PMIC_HOME_BIT     BIT1
+#define PMIC_POWER_BIT    BIT1
+#define PMIC_HOME_BIT     BIT3
 
 typedef enum {
   KEY_TYPE_VOLUME_UP,
@@ -243,7 +243,9 @@ SpmiReadByte (
     return EFI_TIMEOUT;
   }
 
-  Command = ((UINT32)1 << 30) | ((UINT32)MT6363_SID << 24) | Address;
+  /* bit31:30 = 3 selects the extended-long read the PMIC answers; the
+   * SWINF1 short-read form (1 << 30) returns a stale constant on pearl. */
+  Command = ((UINT32)3 << 30) | ((UINT32)MT6363_SID << 24) | Address;
   MmioWrite32 (PMIF_BASE + SPMI_SEND, Command);
 
   for (Timeout = 0; Timeout < 2000; Timeout++) {
